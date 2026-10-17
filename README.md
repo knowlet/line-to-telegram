@@ -31,3 +31,19 @@ Now you can publish your sticker pack, just do it via the Telegram [stickers bot
 [3]: https://store.line.me/stickershop/product/1439/en
 [4]: https://t.me/addstickers/LineDBStrickers
 [5]: https://t.me/Stickers
+
+### Output path safety and offline tests
+
+Pack titles are preserved, including Unicode, spaces and internal dots, but must
+be safe single directory names. Invalid names are rejected rather than silently
+renamed: this includes path separators, `.`/`..`, control characters, Windows
+reserved characters/device names, and trailing dots/spaces. In particular, a
+colon in a title is now rejected instead of being silently removed.
+Images and captions are confined to that pack directory under the working
+directory. Existing symbolic-link output directories/files are rejected. This
+protects against untrusted titles; the working directory must still be trusted.
+Pre-existing hard-link aliases to files outside it and concurrent modification
+by another local process are outside this boundary.
+
+Run `mvn test` for offline HTML/path/image fixtures (no LINE or Telegram calls).
+The symlink fixture requires a filesystem/runtime that supports symbolic links.
