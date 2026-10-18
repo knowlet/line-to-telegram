@@ -47,3 +47,16 @@ by another local process are outside this boundary.
 
 Run `mvn test` for offline HTML/path/image fixtures (no LINE or Telegram calls).
 The symlink fixture requires a filesystem/runtime that supports symbolic links.
+
+### Continuous integration
+
+The `Maven verification` GitHub Actions workflow runs
+`mvn --batch-mode --no-transfer-progress clean verify` on pull requests and pushes
+to `master`, using Linux and a Java 21 build JDK. The existing Java 8 bytecode
+target and project dependencies are unchanged.
+
+CI runs the offline HTML/path/image tests (including symbolic-link rejection)
+and builds the Maven JAR. Maven may download build dependencies; the tests do not
+call LINE or Telegram. This does not verify live sticker downloads, Telegram
+publishing, Windows/macOS behavior, or the separate IntelliJ executable-JAR
+assembly. It does not publish artifacts or create releases.
