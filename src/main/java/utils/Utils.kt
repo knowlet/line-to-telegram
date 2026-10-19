@@ -2,7 +2,11 @@ package utils
 
 import java.awt.*
 import java.awt.image.BufferedImage
-import java.io.File
+import java.nio.file.Files
+import java.nio.file.Path
+import java.nio.file.Paths
+import java.nio.file.LinkOption.NOFOLLOW_LINKS
+import java.nio.file.StandardOpenOption.*
 import java.net.URL
 import javax.imageio.ImageIO
 
@@ -11,10 +15,10 @@ object Utils {
     private const val STICKER_SIZE = 512
     private const val DEFAULT_FOLDER_NAME = "stickers"
 
-    private val WORKING_DIRECTORY = System.getProperty("user.dir")
+    private val outputPaths = OutputPaths(Paths.get(System.getProperty("user.dir")))
 
     fun saveImage(imageUrl: String, name: String, dir: String) {
-        val pathName = "$WORKING_DIRECTORY//$dir//$name.png"
+        val pathName = outputPaths.file(dir, "$name.png")
         val url = URL(imageUrl)
         writeToFile(url, pathName)
     }
@@ -24,6 +28,7 @@ object Utils {
     }
 
     fun writeCaptionImage(caption: String, dir: String) {
+        val path = outputPaths.file(dir, "copyright.png")
         val fontSize = when {
             caption.length > 40 -> FONT_SIZE / 4
             caption.length > 20 -> FONT_SIZE / 2
@@ -32,7 +37,7 @@ object Utils {
         val font = Font("Roboto", Font.PLAIN, fontSize)
         val fontDimension = Dimension(STICKER_SIZE, STICKER_SIZE)
         val image = createCaptionImage(caption, font, fontDimension)
-        ImageIO.write(image, "png", File("$WORKING_DIRECTORY//$dir//copyright.png"))
+        writePng(image, path)
     }
 
     fun writeCaptionImage(str: String) {
@@ -40,8 +45,8 @@ object Utils {
     }
 
     fun createDirectory(name: String) {
-        val dir = File(name)
-        dir.mkdir()
+        val dir = outputPaths.directory(name)
+        if (!Files.exists(dir, NOFOLLOW_LINKS)) Files.createDirectory(dir)
     }
 
     private fun createCaptionImage(str: String, font: Font, dimension: Dimension): BufferedImage {
@@ -73,11 +78,16 @@ object Utils {
         return img
     }
 
-    private fun writeToFile(url: URL, pathName: String) {
+    private fun writeToFile(url: URL, pathName: Path) {
         val bufferedImage = ImageIO.read(url)
         val scaledImage = getResizedImage(bufferedImage)
-        val outputFile = File(pathName)
-        ImageIO.write(scaledImage, "png", outputFile)
+        writePng(scaledImage, pathName)
+    }
+
+    private fun writePng(image: BufferedImage, path: Path) {
+        Files.newOutputStream(path, CREATE, TRUNCATE_EXISTING, WRITE, NOFOLLOW_LINKS).use {
+            check(ImageIO.write(image, "png", it)) { "PNG writer unavailable" }
+        }
     }
 
     private fun getResizedImage(img: BufferedImage): BufferedImage {
