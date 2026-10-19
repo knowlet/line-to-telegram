@@ -2,6 +2,7 @@ package utils
 
 import java.awt.*
 import java.awt.image.BufferedImage
+import java.nio.file.FileAlreadyExistsException
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
@@ -46,7 +47,13 @@ object Utils {
 
     fun createDirectory(name: String) {
         val dir = outputPaths.directory(name)
-        if (!Files.exists(dir, NOFOLLOW_LINKS)) Files.createDirectory(dir)
+        try {
+            Files.createDirectory(dir)
+        } catch (existing: FileAlreadyExistsException) {
+            // Another legitimate creator may have won. Recheck the same safety rules.
+            outputPaths.directory(name)
+            if (!Files.isDirectory(dir, NOFOLLOW_LINKS)) throw existing
+        }
     }
 
     private fun createCaptionImage(str: String, font: Font, dimension: Dimension): BufferedImage {
