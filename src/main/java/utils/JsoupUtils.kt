@@ -30,10 +30,12 @@ object JsoupUtils {
         return imageList.select("ul.mdCMN09Ul").first().select("li.mdCMN09Li")
     }
 
-    // Get a clean url from style, selecting just in the middle of the brackets and without params
+    // Strip CSS whitespace/quotes, then preserve the existing optional image-parameter removal.
     private fun getUrlFromStyle(style: String): String {
-        val urlWithArgs = style.substring(style.indexOf("(") + 1, style.indexOf(")"))
-        return urlWithArgs.substring(0, urlWithArgs.lastIndexOf(";"))
+        val cssUrl = style.substring(style.indexOf("(") + 1, style.indexOf(")")).trim()
+        val urlWithArgs = if (cssUrl.startsWith("\"")) cssUrl.removeSurrounding("\"")
+            else cssUrl.removeSurrounding("'")
+        return urlWithArgs.substringBeforeLast(";")
     }
 
     fun getCopyrightCaption(doc: Element): String {
