@@ -116,6 +116,6 @@ object Utils {
             newHeight = boundHeight
             newWidth = newHeight * width / height
         }
-        return Dimension(newWidth, newHeight)
+        return Dimension(if (newWidth == 0) 1 else newWidth, if (newHeight == 0) 1 else newHeight)
     }
 }
