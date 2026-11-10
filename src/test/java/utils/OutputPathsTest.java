@@ -94,20 +94,30 @@ public class OutputPathsTest {
         assertResizedImage(1024, 512, 512, 256);
         assertResizedImage(512, 1024, 256, 512);
     }
-    @Test public void keepsNegativeOverflowDimensionsInvalid() throws Exception {
-        // Report extreme dimensions without allocating or rendering a large image.
+    private static Dimension scaledDimension(int width, int height) throws Exception {
+        // Exercise arithmetic boundaries without allocating or rendering a large image.
         BufferedImage fixture = new BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB) {
-            @Override public int getHeight() { return 4194304; }
+            @Override public int getWidth() { return width; }
+            @Override public int getHeight() { return height; }
         };
         Method scaledDimension = Utils.class.getDeclaredMethod("getScaledDimension", BufferedImage.class);
         scaledDimension.setAccessible(true);
-        Dimension dimension = (Dimension) scaledDimension.invoke(Utils.INSTANCE, fixture);
-        assertEquals(512, dimension.width);
-        assertEquals(Integer.MIN_VALUE, dimension.height);
-        try {
-            new BufferedImage(dimension.width, dimension.height, BufferedImage.TYPE_INT_ARGB);
-            fail("Expected negative overflow dimension rejection");
-        } catch (IllegalArgumentException expected) { }
+        return (Dimension) scaledDimension.invoke(Utils.INSTANCE, fixture);
+    }
+    @Test public void scalesDimensionsAcrossSignedAndUnsignedOverflowBoundaries() throws Exception {
+        int[] dimensions = {4194303, 4194304, 4194305, 8388607, 8388608, 8388609, Integer.MAX_VALUE};
+        for (int dimension : dimensions) {
+            assertEquals(new Dimension(1, 512), scaledDimension(1, dimension));
+            assertEquals(new Dimension(512, 1), scaledDimension(dimension, 1));
+            assertEquals(new Dimension(512, 512), scaledDimension(dimension, dimension));
+        }
+        assertEquals(new Dimension(256, 512), scaledDimension(4194304, 8388608));
+        assertEquals(new Dimension(512, 256), scaledDimension(8388608, 4194304));
+        // Preserve the existing two-stage integer rounding for ordinary inputs.
+        assertEquals(new Dimension(512, 512), scaledDimension(1025, 1026));
+    }
+    @Test public void resizesRealPortraitImageAcrossIntegerOverflowBoundary() throws Exception {
+        assertResizedImage(1, 4194304, 1, 512);
     }
     @Test public void defaultOverloadsRemainConfinedAndImageNamesAreChecked() throws Exception {
         Utils.INSTANCE.createDirectory("stickers");
