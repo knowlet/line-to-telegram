@@ -103,12 +103,13 @@ object Utils {
     private fun getScaledDimension(img: BufferedImage): Dimension {
         val width = img.width
         val height = img.height
-        val boundWidth = STICKER_SIZE
-        val boundHeight = STICKER_SIZE
-        var newWidth = width
-        var newHeight = height
+        val boundWidth = STICKER_SIZE.toLong()
+        val boundHeight = STICKER_SIZE.toLong()
+        // Keep intermediate products wide; even a narrow image can overflow Int.
+        var newWidth = width.toLong()
+        var newHeight = height.toLong()
 
-        if (width != boundWidth) {
+        if (newWidth != boundWidth) {
             newWidth = boundWidth
             newHeight = newWidth * height / width
         }
@@ -116,6 +117,6 @@ object Utils {
             newHeight = boundHeight
             newWidth = newHeight * width / height
         }
-        return Dimension(newWidth, newHeight)
+        return Dimension(newWidth.coerceAtLeast(1).toInt(), newHeight.coerceAtLeast(1).toInt())
     }
 }

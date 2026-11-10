@@ -1,5 +1,7 @@
 package utils;
 
+import java.awt.Dimension;
+import java.lang.reflect.Method;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.junit.BeforeClass;
@@ -55,6 +57,67 @@ public class OutputPathsTest {
         Utils.INSTANCE.createDirectory("%2e%2e%2foutside"); // Literal text, never URL decoded.
         assertTrue(Files.isDirectory(root.resolve(".cute")));
         assertTrue(Files.isDirectory(root.resolve("%2e%2e%2foutside")));
+    }
+    private static void assertResizedImage(int width, int height, int expectedWidth, int expectedHeight) throws Exception {
+        String name = "resize-" + width + "x" + height;
+        Path input = root.resolve(name + ".png");
+        BufferedImage fixture = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) fixture.setRGB(x, y, 0xffff00ff);
+        }
+        assertTrue(ImageIO.write(fixture, "png", input.toFile()));
+        Utils.INSTANCE.createDirectory("resized-images");
+        Utils.INSTANCE.saveImage(input.toUri().toString(), name, "resized-images");
+        BufferedImage output = ImageIO.read(root.resolve("resized-images").resolve(name + ".png").toFile());
+        assertNotNull(output);
+        assertEquals(expectedWidth, output.getWidth());
+        assertEquals(expectedHeight, output.getHeight());
+        assertEquals(0xffff00ff, output.getRGB(output.getWidth() / 2, output.getHeight() / 2));
+    }
+    @Test public void resizesThinLandscapeImagesWithoutZeroHeight() throws Exception {
+        assertResizedImage(513, 1, 512, 1);
+        assertResizedImage(1024, 1, 512, 1);
+    }
+    @Test public void resizesThinPortraitImagesWithoutZeroWidth() throws Exception {
+        assertResizedImage(1, 513, 1, 512);
+        assertResizedImage(1, 1024, 1, 512);
+    }
+    @Test public void preservesOnePixelAndExactSizeBoundaries() throws Exception {
+        assertResizedImage(512, 1, 512, 1);
+        assertResizedImage(1, 512, 1, 512);
+        assertResizedImage(1, 1, 512, 512);
+        assertResizedImage(512, 512, 512, 512);
+    }
+    @Test public void preservesOrdinaryResizeProportions() throws Exception {
+        assertResizedImage(320, 160, 512, 256);
+        assertResizedImage(160, 320, 256, 512);
+        assertResizedImage(1024, 512, 512, 256);
+        assertResizedImage(512, 1024, 256, 512);
+    }
+    private static Dimension scaledDimension(int width, int height) throws Exception {
+        // Exercise arithmetic boundaries without allocating or rendering a large image.
+        BufferedImage fixture = new BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB) {
+            @Override public int getWidth() { return width; }
+            @Override public int getHeight() { return height; }
+        };
+        Method scaledDimension = Utils.class.getDeclaredMethod("getScaledDimension", BufferedImage.class);
+        scaledDimension.setAccessible(true);
+        return (Dimension) scaledDimension.invoke(Utils.INSTANCE, fixture);
+    }
+    @Test public void scalesDimensionsAcrossSignedAndUnsignedOverflowBoundaries() throws Exception {
+        int[] dimensions = {4194303, 4194304, 4194305, 8388607, 8388608, 8388609, Integer.MAX_VALUE};
+        for (int dimension : dimensions) {
+            assertEquals(new Dimension(1, 512), scaledDimension(1, dimension));
+            assertEquals(new Dimension(512, 1), scaledDimension(dimension, 1));
+            assertEquals(new Dimension(512, 512), scaledDimension(dimension, dimension));
+        }
+        assertEquals(new Dimension(256, 512), scaledDimension(4194304, 8388608));
+        assertEquals(new Dimension(512, 256), scaledDimension(8388608, 4194304));
+        // Preserve the existing two-stage integer rounding for ordinary inputs.
+        assertEquals(new Dimension(512, 512), scaledDimension(1025, 1026));
+    }
+    @Test public void resizesRealPortraitImageAcrossIntegerOverflowBoundary() throws Exception {
+        assertResizedImage(1, 4194304, 1, 512);
     }
     @Test public void defaultOverloadsRemainConfinedAndImageNamesAreChecked() throws Exception {
         Utils.INSTANCE.createDirectory("stickers");
