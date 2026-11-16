@@ -6,6 +6,9 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 import java.awt.image.BufferedImage;
 import java.nio.file.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.*;
 import javax.imageio.ImageIO;
 import static org.junit.Assert.*;
 
@@ -68,10 +71,10 @@ public class OutputPathsTest {
         rejected(() -> Utils.INSTANCE.saveImage("not-a-url", "..\\outside", "stickers"));
         rejected(() -> Utils.INSTANCE.saveImage("not-a-url", "file:stream", "stickers"));
     }
-    @Test public void normalizedPathsHaveImmediateExpectedParents() {
+    @Test public void normalizedPathsHaveImmediateExpectedParents() throws Exception {
         OutputPaths paths = new OutputPaths(root.resolve(".").resolve("unused").resolve(".."));
-        assertEquals(root, paths.directory("pack").getParent());
-        assertEquals(root.resolve("pack"), paths.file("pack", "123.png").getParent());
+        assertEquals(root.toRealPath(), paths.directory("pack").getParent());
+        assertEquals(root.toRealPath().resolve("pack"), paths.file("pack", "123.png").getParent());
     }
     @Test public void rejectsExistingNonDirectory() throws Exception {
         Files.write(root.resolve("not-directory"), new byte[]{1});
@@ -91,5 +94,47 @@ public class OutputPathsTest {
         rejected(() -> Utils.INSTANCE.writeCaptionImage("fixture", "symlink-files"));
         rejected(() -> Utils.INSTANCE.saveImage("not-a-url", "123", "symlink-files"));
         assertArrayEquals(new byte[]{1, 2, 3}, Files.readAllBytes(sentinel));
+    }
+    @Test public void canonicalizesAnExplicitlySymlinkedRoot() throws Exception {
+        Path alias = root.getParent().resolve("working-alias");
+        Files.createSymbolicLink(alias, root.toRealPath());
+        OutputPaths paths = new OutputPaths(alias);
+        assertEquals(root.toRealPath(), paths.directory("pack").getParent());
+        assertEquals(root.toRealPath().resolve("pack"), paths.file("pack", "123.png").getParent());
+    }
+    @Test public void rejectsConsoleDeviceNames() throws Exception {
+        OutputPaths paths = new OutputPaths(root);
+        for (String name : new String[]{"CONIN$", "conout$", "ConIn$", "CONOUT$"}) {
+            try { paths.directory(name); fail("Accepted device directory: " + name); }
+            catch (IllegalArgumentException expected) { }
+            try { paths.file("pack", name); fail("Accepted device file: " + name); }
+            catch (IllegalArgumentException expected) { }
+        }
+        // Console handles require the exact name, unlike the DOS device stems.
+        assertEquals("CONIN$.png", paths.file("pack", "CONIN$.png").getFileName().toString());
+        assertEquals("CONOUT$.txt", paths.directory("CONOUT$.txt").getFileName().toString());
+    }
+
+    @Test public void concurrentDirectoryCreationIsIdempotent() throws Exception {
+        ExecutorService workers = Executors.newFixedThreadPool(16);
+        try {
+            for (int round = 0; round < 100; round++) {
+                final String name = "concurrent-pack-" + round;
+                CountDownLatch start = new CountDownLatch(1);
+                List<Future<?>> results = new ArrayList<>();
+                for (int i = 0; i < 16; i++) {
+                    results.add(workers.submit(() -> {
+                        start.await();
+                        Utils.INSTANCE.createDirectory(name);
+                        return null;
+                    }));
+                }
+                start.countDown();
+                for (Future<?> result : results) result.get(10, TimeUnit.SECONDS);
+                assertTrue(Files.isDirectory(root.resolve(name), LinkOption.NOFOLLOW_LINKS));
+            }
+        } finally {
+            workers.shutdownNow();
+        }
     }
 }

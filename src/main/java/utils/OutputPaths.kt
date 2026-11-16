@@ -16,7 +16,9 @@ internal class OutputPaths(root: Path) {
             "Output names must be safe, non-empty single path components"
         }
         val stem = name.substringBefore('.').toUpperCase(Locale.ROOT)
-        require(stem !in setOf("CON", "PRN", "AUX", "NUL") &&
+        require(!name.equals("CONIN$", ignoreCase = true) &&
+                !name.equals("CONOUT$", ignoreCase = true) &&
+                stem !in setOf("CON", "PRN", "AUX", "NUL") &&
                 !stem.matches(Regex("(?:COM|LPT)[1-9¹²³]"))) {
             "Reserved output name"
         }
